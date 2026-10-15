@@ -40,20 +40,13 @@ export async function loginUser({ email, password }: LoginInput) {
 }
 
 export async function logoutUser(token: string) {
-  // 1. Cek keberadaan sesi berdasarkan token
-  const existingSession = await db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.token, token))
-    .limit(1);
+  // Hapus sesi dari database secara langsung
+  const result: any = await db.delete(sessions).where(eq(sessions.token, token));
 
-  if (existingSession.length === 0) {
+  // Cek apakah ada baris yang terhapus (affectedRows > 0)
+  if (!result || !result[0] || result[0].affectedRows === 0) {
     throw new Error("Unauthorized");
   }
 
-  // 2. Hapus sesi dari database
-  await db.delete(sessions).where(eq(sessions.token, token));
-
   return { data: "OK" };
 }
-
