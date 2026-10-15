@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { users } from "../db/schema";
+import { users, sessions } from "../db/schema";
 import { eq } from "drizzle-orm";
 
 export interface RegisterUserInput {
@@ -35,3 +35,37 @@ export async function registerUser({ name, email, password }: RegisterUserInput)
 
   return { data: "OK" };
 }
+
+export async function getCurrentUser(token: string) {
+  // 1. Cari sesi berdasarkan token
+  const sessionList = await db
+    .select()
+    .from(sessions)
+    .where(eq(sessions.token, token))
+    .limit(1);
+
+  if (sessionList.length === 0) {
+    throw new Error("Unauthorized");
+  }
+
+  const session = sessionList[0];
+
+  // 2. Ambil data profil user berdasarkan userId sesi
+  const userList = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      created_at: users.createdAt,
+    })
+    .from(users)
+    .where(eq(users.id, session.userId))
+    .limit(1);
+
+  if (userList.length === 0) {
+    throw new Error("Unauthorized");
+  }
+
+  return { data: userList[0] };
+}
+
