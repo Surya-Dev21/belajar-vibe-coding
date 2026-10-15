@@ -38,3 +38,15 @@ export async function loginUser({ email, password }: LoginInput) {
 
   return { data: token };
 }
+
+export async function logoutUser(token: string) {
+  // Hapus sesi dari database secara langsung
+  const result: any = await db.delete(sessions).where(eq(sessions.token, token));
+
+  // Cek apakah ada baris yang terhapus (affectedRows > 0)
+  if (!result || !result[0] || result[0].affectedRows === 0) {
+    throw new Error("Unauthorized");
+  }
+
+  return { data: "OK" };
+}
