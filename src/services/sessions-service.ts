@@ -38,3 +38,22 @@ export async function loginUser({ email, password }: LoginInput) {
 
   return { data: token };
 }
+
+export async function logoutUser(token: string) {
+  // 1. Cek keberadaan sesi berdasarkan token
+  const existingSession = await db
+    .select()
+    .from(sessions)
+    .where(eq(sessions.token, token))
+    .limit(1);
+
+  if (existingSession.length === 0) {
+    throw new Error("Unauthorized");
+  }
+
+  // 2. Hapus sesi dari database
+  await db.delete(sessions).where(eq(sessions.token, token));
+
+  return { data: "OK" };
+}
+
