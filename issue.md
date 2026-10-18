@@ -1,213 +1,260 @@
-# Bug: Tidak Ada Validasi Panjang Input pada Registrasi User
+# Task: Implementasi Dokumentasi API Menggunakan Swagger (OpenAPI) di ElysiaJS
 
-## 1. Deskripsi Bug
+## 1. Ringkasan Tugas (Overview)
+Tugas ini bertujuan untuk mengintegrasikan antarmuka dokumentasi interaktif **Swagger UI** ke dalam project. Dengan adanya Swagger, developer atau pengguna API dapat dengan mudah melihat seluruh daftar endpoint yang tersedia, skema request/response, mencoba langsung endpoint (*Try it out*), serta melakukan simulasi autentikasi dengan Bearer token melalui browser.
 
-Endpoint **`POST /api/users`** (registrasi user baru) tidak memvalidasi panjang karakter dari field `name`, `email`, dan `password`. Ketika user mengirim `name` sepanjang **300 karakter**, server mengembalikan response:
-
-```json
-{
-  "error": "Gagal mendaftarkan user"
-}
-```
-
-**Status code**: `400`
-
-Pesan error ini **terlalu generik** dan tidak menjelaskan penyebab sebenarnya. User/client tidak tahu bahwa masalahnya adalah nama yang terlalu panjang.
+Library resmi yang digunakan adalah plugin **`@elysiajs/swagger`**.
 
 ---
 
-## 2. Cara Reproduksi
+## 2. Kriteria Keberhasilan (Acceptance Criteria)
+- [ ] Library `@elysiajs/swagger` terpasang di `package.json` dependencies.
+- [ ] Halaman Swagger UI dapat diakses melalui browser di path **`/swagger`** (misal: `http://localhost:3000/swagger`).
+- [ ] Dokumentasi memiliki metadata yang jelas: Title, Version, dan Deskripsi API.
+- [ ] Seluruh endpoint terdaftar dan dikelompokkan berdasarkan **Tags**:
+  - `General`: `GET /`, `GET /health`
+  - `Users`: `GET /api/users`, `POST /api/users`, `GET /api/users/current`
+  - `Auth`: `POST /api/users/login`, `DELETE /api/users/logout`
+- [ ] Fitur **Authorize (Bearer Token)** tersedia di Swagger UI sehingga endpoint yang membutuhkan header `Authorization: Bearer <token>` (`/current` dan `/logout`) dapat diuji langsung dari UI.
+- [ ] Semua unit test yang sudah ada (`bun test`) tetap berjalan sukses (PASS) tanpa error.
+- [ ] File `README.md` diperbarui dengan informasi tautan Swagger UI.
 
-1. Jalankan aplikasi: `bun --watch src/index.ts`
-2. Kirim request berikut (nama 300 karakter):
+---
+
+## 3. Struktur File Terkait
+
+File-file yang akan disentuh dalam implementasi ini:
+```text
+belajar-vibe-coding/
+├── package.json              # Ditambahkan dependensi @elysiajs/swagger
+├── src/
+│   ├── index.ts              # Inisialisasi plugin swagger & konfigurasi OpenAPI
+│   └── routes/
+│       └── users-route.ts    # Penambahan metadata detail (summary, tags, security)
+└── README.md                 # Penambahan link & petunjuk akses /swagger
+```
+
+---
+
+## 4. Tahapan Implementasi (Step-by-Step Guide)
+
+### Langkah 1: Install Plugin `@elysiajs/swagger`
+Jalankan perintah berikut di terminal root project:
 
 ```bash
-curl -X POST http://localhost:3000/api/users \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-    "email": "test300@example.com",
-    "password": "password123"
-  }'
+bun add @elysiajs/swagger
 ```
 
-3. **Hasil aktual**: `{"error":"Gagal mendaftarkan user"}` (status 400)
-4. **Hasil yang diharapkan**: `{"error":"Nama maksimal 255 karakter"}` (status 422 atau 400 dengan pesan spesifik)
+**Verifikasi**: Pastikan `@elysiajs/swagger` sudah tercatat di bagian `dependencies` pada file [`package.json`](file:///c:/Users/user/Documents/Developments/GITHUB/belajar-vibe-coding/package.json).
 
 ---
 
-## 3. Analisis Akar Masalah (Root Cause)
+### Langkah 2: Daftarkan Plugin Swagger di `src/index.ts`
+Buka file [`src/index.ts`](file:///c:/Users/user/Documents/Developments/GITHUB/belajar-vibe-coding/src/index.ts).
 
-### Alur data saat ini:
+1. Import fungsi `swagger` dari `@elysiajs/swagger`:
+   ```typescript
+   import { swagger } from "@elysiajs/swagger";
+   ```
 
-```
-Request masuk → Route (validasi Elysia) → Service → Database (MySQL)
-```
+2. Pasang plugin `.use(swagger(...))` pada instance `app`.
+   Konfigurasikan informasi dokumentasi dan skema keamanan Bearer token (`bearerAuth`) agar tombol **Authorize** muncul di Swagger UI:
+   ```typescript
+   export const app = new Elysia()
+     .use(
+       swagger({
+         path: "/swagger",
+         documentation: {
+           info: {
+             title: "Belajar Vibe Coding - API Documentation",
+             version: "1.0.0",
+             description:
+               "Dokumentasi API interaktif untuk autentikasi user dan manajemen sesi dengan ElysiaJS, Drizzle ORM, dan MySQL.",
+           },
+           tags: [
+             { name: "General", description: "Endpoint sistem dan monitoring kesehatan server" },
+             { name: "Users", description: "Endpoint manajemen data dan registrasi pengguna" },
+             { name: "Auth", description: "Endpoint autentikasi dan manajemen sesi login/logout" },
+           ],
+           components: {
+             securitySchemes: {
+               bearerAuth: {
+                 type: "http",
+                 scheme: "bearer",
+                 bearerFormat: "UUID",
+                 description: "Masukkan session token UUID yang didapat dari endpoint login",
+               },
+             },
+           },
+         },
+       })
+     )
+   ```
 
-### Masalah terjadi di 2 tempat:
-
-### Masalah 1: Tidak ada validasi `maxLength` di Route
-
-**File**: `src/routes/users-route.ts` (baris 27-31)
-
-```typescript
-body: t.Object({
-  name: t.String({ minLength: 1 }),         // ❌ tidak ada maxLength
-  email: t.String({ format: "email" }),      // ❌ tidak ada maxLength
-  password: t.String({ minLength: 1 }),      // ❌ tidak ada maxLength
-}),
-```
-
-Saat ini hanya ada validasi `minLength: 1` (tidak boleh kosong), tapi **tidak ada batas maksimal**. Seharusnya disesuaikan dengan batasan kolom di database.
-
-### Masalah 2: Pesan error generik di catch block
-
-**File**: `src/routes/users-route.ts` (baris 21-23)
-
-```typescript
-} catch (error: any) {
-  set.status = 400;
-  return { error: error.message || "Gagal mendaftarkan user" };
-}
-```
-
-Ketika database menolak data karena terlalu panjang, error dari MySQL tidak informatif untuk end-user. Seharusnya validasi sudah ditangkap **sebelum** sampai ke database.
-
-### Referensi schema database:
-
-**File**: `src/db/schema.ts` (baris 3-9)
-
-```typescript
-export const users = mysqlTable("users", {
-  id: serial("id").primaryKey(),
-  name: varchar("name", { length: 255 }),      // maks 255 karakter
-  email: varchar("email", { length: 255 }),     // maks 255 karakter
-  password: varchar("password", { length: 255 }),// maks 255 karakter (sudah di-hash)
-  createdAt: timestamp("created_at").defaultNow(),
-});
-```
-
----
-
-## 4. Tahapan Perbaikan (Step-by-Step)
-
-### Step 1: Tambahkan validasi `maxLength` di Route
-
-**File yang diedit**: `src/routes/users-route.ts`
-
-**Apa yang dilakukan**: Tambahkan constraint `maxLength` pada schema validasi body request di endpoint `POST /users`.
-
-**Cari kode ini** (sekitar baris 27-31):
-
-```typescript
-body: t.Object({
-  name: t.String({ minLength: 1 }),
-  email: t.String({ format: "email" }),
-  password: t.String({ minLength: 1 }),
-}),
-```
-
-**Ganti menjadi**:
-
-```typescript
-body: t.Object({
-  name: t.String({ minLength: 1, maxLength: 255 }),
-  email: t.String({ format: "email", maxLength: 255 }),
-  password: t.String({ minLength: 1, maxLength: 255 }),
-}),
-```
-
-**Penjelasan**:
-- `maxLength: 255` memastikan Elysia akan **otomatis menolak** request yang melebihi batas **sebelum** kode masuk ke service atau database.
-- Elysia akan mengembalikan error validasi bawaan yang sudah cukup jelas (status `422`).
-- Angka `255` disesuaikan dengan `varchar({ length: 255 })` pada schema database (`src/db/schema.ts` baris 5-7).
-
----
-
-### Step 2: (Opsional) Tambahkan juga validasi `maxLength` di endpoint Login
-
-**File yang diedit**: `src/routes/users-route.ts`
-
-**Apa yang dilakukan**: Endpoint login juga tidak punya batasan maxLength. Meskipun tidak menyebabkan error database, tetap sebaiknya divalidasi untuk konsistensi dan keamanan (mencegah request body terlalu besar).
-
-**Cari kode ini** (sekitar baris 47-50):
-
-```typescript
-body: t.Object({
-  email: t.String({ format: "email" }),
-  password: t.String({ minLength: 1 }),
-}),
-```
-
-**Ganti menjadi**:
-
-```typescript
-body: t.Object({
-  email: t.String({ format: "email", maxLength: 255 }),
-  password: t.String({ minLength: 1, maxLength: 255 }),
-}),
-```
+3. Tambahkan metadata `detail` pada endpoint root dan health check di `src/index.ts`:
+   - Endpoint `GET /`:
+     ```typescript
+     .get(
+       "/",
+       () => ({
+         message: "Welcome to Elysia + Bun + Drizzle + MySQL API",
+         status: "ok",
+         timestamp: new Date().toISOString(),
+       }),
+       {
+         detail: {
+           tags: ["General"],
+           summary: "Welcome message & server status",
+         },
+       }
+     )
+     ```
+   - Endpoint `GET /health`:
+     ```typescript
+     .get(
+       "/health",
+       () => ({
+         status: "healthy",
+         uptime: process.uptime(),
+       }),
+       {
+         detail: {
+           tags: ["General"],
+           summary: "Health check & uptime server",
+         },
+       }
+     )
+     ```
+   - Endpoint `GET /api/users`:
+     ```typescript
+     .get(
+       "/users",
+       async () => {
+         try {
+           return await db.select().from(users);
+         } catch (error: any) {
+           return { error: error.message };
+         }
+       },
+       {
+         detail: {
+           tags: ["Users"],
+           summary: "Mendapatkan daftar seluruh user",
+         },
+       }
+     )
+     ```
 
 ---
 
-### Step 3: Testing — Pastikan Perbaikan Bekerja
+### Langkah 3: Tambahkan Metadata Swagger pada Route Users (`src/routes/users-route.ts`)
+Buka file [`src/routes/users-route.ts`](file:///c:/Users/user/Documents/Developments/GITHUB/belajar-vibe-coding/src/routes/users-route.ts).
 
-Setelah perubahan disimpan, jalankan test berikut:
+Tambahkan properti `detail` pada konfigurasi skema setiap endpoint:
 
-#### Test 1: Registrasi dengan nama 300 karakter (harus ditolak)
+1. **`POST /` (Registrasi User)**:
+   ```typescript
+   {
+     body: t.Object({
+       name: t.String({ minLength: 1, maxLength: 255 }),
+       email: t.String({ format: "email", maxLength: 255 }),
+       password: t.String({ minLength: 1, maxLength: 255 }),
+     }),
+     detail: {
+       tags: ["Users"],
+       summary: "Registrasi pengguna baru",
+       description: "Mendaftarkan user baru dengan email unik dan password yang di-hash dengan bcrypt.",
+     },
+   }
+   ```
 
-```bash
-curl -X POST http://localhost:3000/api/users \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-    "email": "test300@example.com",
-    "password": "password123"
-  }'
-```
+2. **`POST /login` (Login User)**:
+   ```typescript
+   {
+     body: t.Object({
+       email: t.String({ format: "email", maxLength: 255 }),
+       password: t.String({ minLength: 1, maxLength: 255 }),
+     }),
+     detail: {
+       tags: ["Auth"],
+       summary: "Login pengguna",
+       description: "Verifikasi email dan password, kemudian mengembalikan UUID session token baru.",
+     },
+   }
+   ```
 
-**Hasil yang diharapkan**: Status `422` dengan pesan error validasi dari Elysia (bukan error generik dari database).
+3. **`GET /current` (Get Current User Profile)**:
+   Tambahkan konfigurasi `security: [{ bearerAuth: [] }]`:
+   ```typescript
+   {
+     detail: {
+       tags: ["Users"],
+       summary: "Mendapatkan profil user yang sedang login",
+       description: "Membutuhkan header Authorization dengan format 'Bearer <token>'.",
+       security: [{ bearerAuth: [] }],
+     },
+   }
+   ```
 
-#### Test 2: Registrasi dengan nama normal (harus berhasil)
-
-```bash
-curl -X POST http://localhost:3000/api/users \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "John Doe",
-    "email": "johndoe@example.com",
-    "password": "password123"
-  }'
-```
-
-**Hasil yang diharapkan**: Status `201` dengan response `{"data":"OK"}`.
-
-#### Test 3: Registrasi dengan email 300 karakter (harus ditolak)
-
-```bash
-curl -X POST http://localhost:3000/api/users \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Jane",
-    "email": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA@example.com",
-    "password": "password123"
-  }'
-```
-
-**Hasil yang diharapkan**: Status `422` dengan pesan error validasi.
+4. **`DELETE /logout` (Logout User)**:
+   Tambahkan konfigurasi `security: [{ bearerAuth: [] }]`:
+   ```typescript
+   {
+     detail: {
+       tags: ["Auth"],
+       summary: "Logout pengguna",
+       description: "Menghapus token sesi dari database sehingga token tidak lagi valid.",
+       security: [{ bearerAuth: [] }],
+     },
+   }
+   ```
 
 ---
 
-## 5. File yang Perlu Diubah
-
-| File | Perubahan |
-|---|---|
-| `src/routes/users-route.ts` | Tambah `maxLength: 255` pada validasi body `POST /users` dan `POST /users/login` |
+### Langkah 4: Perbarui `README.md`
+Buka file [`README.md`](file:///c:/Users/user/Documents/Developments/GITHUB/belajar-vibe-coding/README.md).
+1. Tambahkan informasi bahwa Swagger UI tersedia di `http://localhost:3000/swagger`.
+2. Cantumkan `@elysiajs/swagger` pada tabel daftar library dependencies.
 
 ---
 
-## 6. Catatan Penting
+### Langkah 5: Pengujian & Verifikasi (Testing)
 
-- **Jangan ubah** file `src/db/schema.ts` — schema database sudah benar, masalahnya hanya di layer validasi route.
-- **Jangan ubah** file `src/services/users-service.ts` — logic service tidak perlu dimodifikasi karena validasi seharusnya ditangani di layer route sebelum data masuk ke service.
-- Prinsipnya: **validasi input di pintu masuk (route)**, bukan di dalam service atau database.
+1. **Verifikasi Tampilan Swagger UI**:
+   - Jalankan server:
+     ```bash
+     bun run dev
+     ```
+   - Buka browser ke alamat: `http://localhost:3000/swagger`
+   - Pastikan:
+     - Header halaman menampilkan judul **Belajar Vibe Coding - API Documentation**.
+     - Tombol **Authorize** gembok hijau muncul di kanan atas.
+     - Tag `General`, `Users`, dan `Auth` tampil rapi.
+     - Setiap endpoint memiliki summary yang jelas.
+
+2. **Verifikasi Interaksi & Fitur "Try it out"**:
+   - Coba jalankan `GET /health` melalui Swagger UI, pastikan respon 200 muncul.
+   - Coba jalankan `POST /api/users` untuk registrasi user baru.
+   - Coba jalankan `POST /api/users/login`, copy string token UUID dari respon.
+   - Klik tombol **Authorize** di atas, masukkan token ke form Bearer auth, klik **Authorize**, lalu **Close**.
+   - Coba jalankan `GET /api/users/current`, pastikan data user berhasil tampil.
+   - Coba jalankan `DELETE /api/users/logout`, pastikan respon `{"data": "OK"}`.
+
+3. **Verifikasi Unit Test Otomatis**:
+   Jalankan test suite untuk memastikan tidak ada perubahan yang merusak endpoint:
+   ```bash
+   bun test
+   ```
+   *Expected Output*: Semua test file (`tests/users.test.ts` dan `tests/sessions.test.ts`) lolos / PASS.
+
+---
+
+## 5. Ringkasan Checklist Pengerjaan
+
+- [ ] Install `@elysiajs/swagger` menggunakan `bun add @elysiajs/swagger`.
+- [ ] Daftarkan plugin di `src/index.ts` dengan path `/swagger` dan konfigurasi `documentation`.
+- [ ] Tambahkan metadata `detail` pada endpoint di `src/index.ts` (`/`, `/health`, `/api/users`).
+- [ ] Tambahkan metadata `detail` dan `security` pada endpoint di `src/routes/users-route.ts`.
+- [ ] Update `README.md` dengan info Swagger UI.
+- [ ] Buka `http://localhost:3000/swagger` di browser dan uji fitur *Authorize* serta *Try it out*.
+- [ ] Jalankan `bun test` dan pastikan semua test PASS.

@@ -38,6 +38,7 @@ Aplikasi ini adalah backend service yang dirancang dengan memisahkan layer HTTP 
 | Library / Package | Tipe | Deskripsi / Fungsi |
 |-------------------|------|--------------------|
 | `elysia` | Dependency | Framework web HTTP server dan skema validasi type-safe |
+| `@elysiajs/swagger` | Dependency | Plugin dokumentasi interaktif Swagger UI & OpenAPI spec |
 | `drizzle-orm` | Dependency | Query builder dan ORM untuk berinteraksi dengan database |
 | `mysql2` | Dependency | Driver client MySQL untuk koneksi database |
 | `drizzle-kit` | Dev Dependency | CLI migrasi skema database, pembuatan file SQL, dan schema push |
@@ -117,6 +118,9 @@ Menyimpan token sesi aktif untuk autentikasi stateful.
 ## 🔌 Dokumentasi API
 
 Base URL lokal: `http://localhost:3000`
+
+> [!TIP]
+> **Swagger UI Interaktif** tersedia di [`http://localhost:3000/swagger`](http://localhost:3000/swagger). Anda dapat mengeksplorasi endpoint, melihat schema data, dan mencoba langsung request (termasuk fitur *Authorize* dengan Bearer token).
 
 ### 1. Welcome & System Health
 
