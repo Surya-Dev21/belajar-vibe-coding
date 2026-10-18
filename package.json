@@ -7,7 +7,8 @@
     "start": "bun src/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "test": "bun test"
   },
   "dependencies": {
     "drizzle-orm": "^0.38.4",
