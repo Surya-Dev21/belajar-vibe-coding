@@ -29,6 +29,11 @@ export const usersRoute = new Elysia({ prefix: "/users" })
         email: t.String({ format: "email", maxLength: 255 }),
         password: t.String({ minLength: 1, maxLength: 255 }),
       }),
+      detail: {
+        tags: ["Users"],
+        summary: "Registrasi pengguna baru",
+        description: "Mendaftarkan user baru dengan email unik dan password yang di-hash dengan bcrypt.",
+      },
     }
   )
   .post(
@@ -48,6 +53,11 @@ export const usersRoute = new Elysia({ prefix: "/users" })
         email: t.String({ format: "email", maxLength: 255 }),
         password: t.String({ minLength: 1, maxLength: 255 }),
       }),
+      detail: {
+        tags: ["Auth"],
+        summary: "Login pengguna",
+        description: "Verifikasi email dan password, kemudian mengembalikan UUID session token baru.",
+      },
     }
   )
   .get(
@@ -67,6 +77,14 @@ export const usersRoute = new Elysia({ prefix: "/users" })
         set.status = 401;
         return { error: "Unauthorized" };
       }
+    },
+    {
+      detail: {
+        tags: ["Users"],
+        summary: "Mendapatkan profil user yang sedang login",
+        description: "Membutuhkan header Authorization dengan format 'Bearer <token>'.",
+        security: [{ bearerAuth: [] }],
+      },
     }
   )
   .delete(
@@ -86,5 +104,13 @@ export const usersRoute = new Elysia({ prefix: "/users" })
         set.status = 401;
         return { error: "Unauthorized" };
       }
+    },
+    {
+      detail: {
+        tags: ["Auth"],
+        summary: "Logout pengguna",
+        description: "Menghapus token sesi dari database sehingga token tidak lagi valid.",
+        security: [{ bearerAuth: [] }],
+      },
     }
   );
